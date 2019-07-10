@@ -1,0 +1,143 @@
+import os
+import numpy as np
+import pandas as pd
+import os
+import keras
+from keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Dropout, BatchNormalization
+from keras.preprocessing.image import ImageDataGenerator
+from keras.models import Sequential
+from keras import regularizers
+from sklearn.model_selection import train_test_split
+from keras.utils import to_categorical
+import cv2
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# in order to solve an error I was getting upon running keras
+os.environ['KMP_DUPLICATE_LIB_OK']='True' 
+
+#loading training data
+training_data = []
+def create_training_data():
+    
+    for category in CATEGORIES:
+        path = os.path.join(DATADIR, category) #path to alphabets
+        class_num = CATEGORIES.index(category)
+        for img in os.listdir(path):
+            try:
+                img_array = cv2.imread(os.path.join(path,img), cv2.IMREAD_GRAYSCALE)
+                new_array = cv2.resize(img_array, (64, 64))
+                training_data.append([new_array, class_num])
+            except Exception as e:
+                pass
+create_training_data()
+random.shuffle(training_data)
+
+# separating into features and labels
+X=[]
+y=[]
+for features,label in training_data:
+    X.append(features)
+    y.append(label)
+    
+# formatting training data properly
+X = np.array(X).reshape(-1, 64, 64, 1)
+y = keras.utils.to_categorical(y)
+
+# creating a convolutional neural network
+model = Sequential()
+model.add(Conv2D(16, kernel_size = [3,3], padding = 'same', activation = 'relu', input_shape = (64,64,1)))
+model.add(Conv2D(32, kernel_size = [3,3], padding = 'same', activation = 'relu'))
+model.add(MaxPool2D(pool_size = [3,3]))
+    
+model.add(Conv2D(32, kernel_size = [3,3], padding = 'same', activation = 'relu'))
+model.add(Conv2D(64, kernel_size = [3,3], padding = 'same', activation = 'relu'))
+model.add(MaxPool2D(pool_size = [3,3]))
+    
+model.add(Conv2D(128, kernel_size = [3,3], padding = 'same', activation = 'relu'))
+model.add(Conv2D(256, kernel_size = [3,3], padding = 'same', activation = 'relu'))
+model.add(MaxPool2D(pool_size = [3,3]))
+    
+model.add(BatchNormalization())
+    
+model.add(Flatten())
+model.add(Dropout(0.5))
+model.add(Dense(512, activation = 'relu', kernel_regularizer = regularizers.l2(0.001)))
+model.add(Dense(29, activation = 'softmax'))
+
+
+model.compile(optimizer = 'adam', loss = keras.losses.categorical_crossentropy, metrics = ["accuracy"])
+model.fit(X, y, batch_size=64, epochs=6, validation_split=0.1)
+
+# evaluating model with kaggle testing data
+testing_data = []
+names = []
+test_dir = "../input/asl-alphabet/asl_alphabet_test/asl_alphabet_test"
+def create_testing_data():
+    path = test_dir
+    for img in os.listdir(path):
+        try:
+            img_array = cv2.imread(os.path.join(path,img), cv2.IMREAD_GRAYSCALE)
+            new_array = cv2.resize(img_array, (64, 64))
+            testing_data.append(new_array)
+            names.append(img)
+        except Exception as e:
+            pass
+create_testing_data()
+
+#predicting testing data
+new_testing_data = np.array(testing_data).reshape(-1, 64, 64, 1)
+predictions=[]
+for img in new_testing_data:
+    img = img.reshape(1,64,64,1)
+    pred = model.predict_classes(img)
+    predictions.append(pred[0])
+
+#printing out images with our predictions + what they actually are
+fig = plt.figure(figsize = (13,13))
+index = 0
+for i in range(1, 29):
+    y = fig.add_subplot(5,6,i)
+    str_label = CATEGORIES[predictions[index]]
+    y.imshow(testing_data[index], cmap = 'gray')
+    title = "prediction = {}\n {}".format(str_label,names[index])
+    plt.title(title)
+    y.axes.get_xaxis().set_visible(False)
+    y.axes.get_yaxis().set_visible(False)
+    index+=1
+
+
+#doing the same thing but with pictures of my hand
+own_data =[]
+own_names = []
+own_dir = '../input/aslishaantwo/asl_ishaan/asl_ishaan'
+def create_own_data():
+        path = own_dir
+        for img in os.listdir(path):
+            try:
+                img_array = cv2.imread(os.path.join(path,img), cv2.IMREAD_GRAYSCALE)
+                new_array = cv2.resize(img_array, (64, 64))
+                own_data.append(new_array)
+                own_names.append(img)
+            except Exception as e:
+                pass
+create_own_data()
+
+new_own_data = np.array(own_data).reshape(-1, 64, 64, 1)
+own_predictions=[]
+for img in new_own_data:
+    img = img.reshape(1,64,64,1)
+    new_pred = model.predict_classes(img)
+    own_predictions.append(new_pred[0])
+      
+own_fig = plt.figure(figsize = (13,13))
+index = 0
+for i in range(1, 29):
+    new_y = own_fig.add_subplot(5,6,i)
+    str_label = CATEGORIES[own_predictions[index]]
+    new_y.imshow(own_data[index], cmap = 'gray')
+    title = "prediction = {}\n {}".format(str_label,own_names[index])
+    plt.title(title)
+    y.axes.get_xaxis().set_visible(False)
+    y.axes.get_yaxis().set_visible(False)
+    index+=1
